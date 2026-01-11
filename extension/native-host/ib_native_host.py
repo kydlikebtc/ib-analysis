@@ -182,18 +182,28 @@ class NativeMessagingHost:
             }
 
     def _get_simulated_portfolio(self) -> Dict:
-        """返回模拟的投资组合数据（用于测试）"""
+        """
+        返回模拟的投资组合数据（用于测试）
+
+        包含多种资产类型:
+        - STK (股票): AAPL, MSFT
+        - OPT (期权): AAPL Call, SPY Put
+        - FUT (期货): ES (E-mini S&P 500)
+        - FUND (基金/ETF): SPY, QQQ
+        - CASH (外汇): EUR.USD
+        - CRYPTO (加密货币): BTC
+        """
         return {
             "success": True,
             "data": {
                 "account": {
-                    "net_liquidation": 125000.00,
-                    "unrealized_pnl": 3250.50,
-                    "daily_pnl": 850.25,
+                    "net_liquidation": 185000.00,
+                    "unrealized_pnl": 5750.50,
+                    "daily_pnl": 1250.25,
                 },
                 "greeks": {
-                    "delta": 0.65,
-                    "delta_dollars": 8125.00,
+                    "delta": 0.78,
+                    "delta_dollars": 14425.00,
                     "gamma": 0.02,
                     "gamma_dollars": 250.00,
                     "theta": -0.15,
@@ -203,19 +213,24 @@ class NativeMessagingHost:
                 },
                 "risk": {
                     "level": "MEDIUM",
-                    "score": 45,
-                    "var_95": 5250.00,
-                    "max_loss": 12500.00,
-                    "probability_loss": 0.35,
+                    "score": 48,
+                    "var_95": 7850.00,
+                    "expected_return": 2500.00,
+                    "max_loss": 18500.00,
+                    "probability_loss": 0.32,
                 },
                 "recommendations": [
                     {
                         "priority": "HIGH",
-                        "message": "AAPL 期权头寸 Delta 过高，建议对冲"
+                        "message": "ES 期货头寸敞口较大 (Delta=100)，市场波动时注意风险"
                     },
                     {
                         "priority": "MEDIUM",
                         "message": "投资组合整体 Theta 为负，每日时间价值衰减约 $187"
+                    },
+                    {
+                        "priority": "MEDIUM",
+                        "message": "EUR.USD 外汇敞口 10,000 欧元，注意汇率波动风险"
                     },
                     {
                         "priority": "LOW",
@@ -223,42 +238,97 @@ class NativeMessagingHost:
                     }
                 ],
                 "positions": [
+                    # 股票 (STK)
                     {
                         "symbol": "AAPL",
                         "sec_type": "STK",
+                        "sec_type_display": "股票",
                         "position": 100,
+                        "market_price": 175.00,
                         "market_value": 17500.00,
                         "unrealized_pnl": 1250.00
                     },
                     {
+                        "symbol": "MSFT",
+                        "sec_type": "STK",
+                        "sec_type_display": "股票",
+                        "position": 50,
+                        "market_price": 420.00,
+                        "market_value": 21000.00,
+                        "unrealized_pnl": 800.00
+                    },
+                    # 期权 (OPT)
+                    {
                         "symbol": "AAPL",
                         "sec_type": "OPT",
+                        "sec_type_display": "期权",
                         "position": 5,
+                        "market_price": 5.00,
                         "market_value": 2500.00,
                         "unrealized_pnl": 350.00,
                         "details": "C 180 2025-02-21"
                     },
                     {
-                        "symbol": "MSFT",
-                        "sec_type": "STK",
-                        "position": 50,
-                        "market_value": 21000.00,
-                        "unrealized_pnl": 800.00
+                        "symbol": "SPY",
+                        "sec_type": "OPT",
+                        "sec_type_display": "期权",
+                        "position": -2,
+                        "market_price": 6.00,
+                        "market_value": -1200.00,
+                        "unrealized_pnl": 150.00,
+                        "details": "P 460 2025-01-31"
                     },
+                    # 期货 (FUT)
+                    {
+                        "symbol": "ES",
+                        "sec_type": "FUT",
+                        "sec_type_display": "期货",
+                        "position": 2,
+                        "market_price": 5025.00,
+                        "market_value": 502500.00,  # 名义价值
+                        "unrealized_pnl": 2500.00,
+                        "details": "Mar 2025, 乘数=50"
+                    },
+                    # 基金/ETF (FUND)
                     {
                         "symbol": "SPY",
-                        "sec_type": "STK",
+                        "sec_type": "FUND",
+                        "sec_type_display": "基金",
                         "position": 100,
+                        "market_price": 480.00,
                         "market_value": 48000.00,
                         "unrealized_pnl": 500.00
                     },
                     {
-                        "symbol": "SPY",
-                        "sec_type": "OPT",
-                        "position": -2,
-                        "market_value": -1200.00,
+                        "symbol": "QQQ",
+                        "sec_type": "FUND",
+                        "sec_type_display": "基金",
+                        "position": 50,
+                        "market_price": 420.00,
+                        "market_value": 21000.00,
+                        "unrealized_pnl": 350.00
+                    },
+                    # 外汇 (CASH)
+                    {
+                        "symbol": "EUR.USD",
+                        "sec_type": "CASH",
+                        "sec_type_display": "外汇",
+                        "position": 10000,  # 10,000 欧元
+                        "market_price": 1.0850,
+                        "market_value": 10850.00,
                         "unrealized_pnl": 150.00,
-                        "details": "P 460 2025-01-31"
+                        "details": "EUR/USD"
+                    },
+                    # 加密货币 (CRYPTO) - 注意: IB 支持有限
+                    {
+                        "symbol": "BTC",
+                        "sec_type": "CRYPTO",
+                        "sec_type_display": "加密货币",
+                        "position": 0.5,  # 0.5 BTC
+                        "market_price": 42000.00,
+                        "market_value": 21000.00,
+                        "unrealized_pnl": 1500.00,
+                        "details": "BTC/USD"
                     }
                 ]
             },
@@ -323,16 +393,41 @@ class NativeMessagingHost:
         recommendations = data.get('recommendations', [])
         positions = data.get('positions', [])
 
+        # 资产类型颜色映射
+        sec_type_colors = {
+            'STK': '#2E86AB',    # 股票 - 蓝色
+            'OPT': '#6610f2',    # 期权 - 紫色
+            'FUT': '#fd7e14',    # 期货 - 橙色
+            'FUND': '#28A745',   # 基金 - 绿色
+            'CASH': '#17a2b8',   # 外汇 - 青色
+            'CRYPTO': '#FFC107', # 加密货币 - 黄色
+            'BOND': '#6c757d',   # 债券 - 灰色
+            'CFD': '#DC3545',    # CFD - 红色
+            'FOP': '#e83e8c',    # 期货期权 - 粉色
+            'WAR': '#20c997',    # 权证 - 青绿色
+        }
+
         # 生成持仓表格行
         position_rows = ""
         for pos in positions:
             pnl_color = "green" if pos.get('unrealized_pnl', 0) >= 0 else "red"
+            sec_type = pos.get('sec_type', '')
+            sec_type_display = pos.get('sec_type_display', sec_type)
+            sec_type_color = sec_type_colors.get(sec_type, '#6c757d')
+
+            # 格式化数量 (期货/加密货币可能有小数)
+            position_val = pos.get('position', 0)
+            if abs(position_val) >= 1:
+                position_str = f"{position_val:+.0f}"
+            else:
+                position_str = f"{position_val:+.4f}"
+
             position_rows += f"""
             <tr>
                 <td>{pos.get('symbol', '')}</td>
-                <td>{pos.get('sec_type', '')}</td>
-                <td>{pos.get('position', 0):+.0f}</td>
-                <td>${pos.get('market_value', 0):,.2f}</td>
+                <td><span style="background: {sec_type_color}; color: white; padding: 2px 8px; border-radius: 3px; font-size: 11px;">{sec_type_display}</span></td>
+                <td>{position_str}</td>
+                <td>${abs(pos.get('market_value', 0)):,.2f}</td>
                 <td style="color: {pnl_color}">${pos.get('unrealized_pnl', 0):+,.2f}</td>
             </tr>
             """
@@ -351,9 +446,15 @@ class NativeMessagingHost:
             """
 
         # 准备图表数据
-        # 持仓分配饼图数据
-        pie_labels = [pos.get('symbol', '') for pos in positions]
-        pie_values = [abs(pos.get('market_value', 0)) for pos in positions]
+        # 按资产类型分组的饼图数据
+        type_values = {}
+        for pos in positions:
+            sec_type = pos.get('sec_type_display', pos.get('sec_type', 'Unknown'))
+            market_val = abs(pos.get('market_value', 0))
+            type_values[sec_type] = type_values.get(sec_type, 0) + market_val
+
+        pie_labels = list(type_values.keys())
+        pie_values = list(type_values.values())
 
         # 希腊值柱状图数据
         greeks_labels = ['Delta ($)', 'Gamma ($)', 'Theta ($/日)', 'Vega ($)']

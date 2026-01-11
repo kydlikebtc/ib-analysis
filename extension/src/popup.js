@@ -271,6 +271,20 @@ function renderPositions(positions) {
   // 更新持仓数量
   setElementText('position-count', positions.length.toString());
 
+  // 资产类型颜色映射
+  const secTypeColors = {
+    'STK': '#2E86AB',    // 股票 - 蓝色
+    'OPT': '#6610f2',    // 期权 - 紫色
+    'FUT': '#fd7e14',    // 期货 - 橙色
+    'FUND': '#28A745',   // 基金 - 绿色
+    'CASH': '#17a2b8',   // 外汇 - 青色
+    'CRYPTO': '#FFC107', // 加密货币 - 黄色
+    'BOND': '#6c757d',   // 债券 - 灰色
+    'CFD': '#DC3545',    // CFD - 红色
+    'FOP': '#e83e8c',    // 期货期权 - 粉色
+    'WAR': '#20c997',    // 权证 - 青绿色
+  };
+
   const header = `
     <div class="position-row header">
       <span>标的</span>
@@ -280,19 +294,31 @@ function renderPositions(positions) {
     </div>
   `;
 
-  const rows = positions.slice(0, 10).map(pos => `
-    <div class="position-row">
-      <div>
-        <span class="position-symbol">${pos.symbol}</span>
-        <span class="position-type">${pos.sec_type}</span>
+  const rows = positions.slice(0, 10).map(pos => {
+    const secType = pos.sec_type || 'STK';
+    const secTypeDisplay = pos.sec_type_display || secType;
+    const secTypeColor = secTypeColors[secType] || '#6c757d';
+
+    // 格式化数量 (处理小数)
+    const positionVal = pos.position || 0;
+    const positionStr = Math.abs(positionVal) >= 1
+      ? positionVal.toFixed(0)
+      : positionVal.toFixed(4);
+
+    return `
+      <div class="position-row">
+        <div>
+          <span class="position-symbol">${pos.symbol}</span>
+          <span class="position-type" style="background: ${secTypeColor}; color: white; padding: 1px 4px; border-radius: 2px; font-size: 10px;">${secTypeDisplay}</span>
+        </div>
+        <span>${positionStr}</span>
+        <span>${formatCurrency(Math.abs(pos.market_value))}</span>
+        <span class="position-pnl ${pos.unrealized_pnl >= 0 ? 'positive' : 'negative'}">
+          ${formatCurrency(pos.unrealized_pnl)}
+        </span>
       </div>
-      <span>${pos.position}</span>
-      <span>${formatCurrency(pos.market_value)}</span>
-      <span class="position-pnl ${pos.unrealized_pnl >= 0 ? 'positive' : 'negative'}">
-        ${formatCurrency(pos.unrealized_pnl)}
-      </span>
-    </div>
-  `).join('');
+    `;
+  }).join('');
 
   container.innerHTML = header + rows;
 }

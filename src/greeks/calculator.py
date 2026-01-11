@@ -1,12 +1,24 @@
 """
 Greeks Calculator - Main calculator for portfolio Greeks
+
+支持的资产类型:
+- STK (股票): Delta = 持仓数
+- OPT (期权): Black-Scholes 模型
+- FUT (期货): Delta = 合约乘数 × 持仓数
+- CASH (外汇): Delta = 持仓金额
+- CFD (差价合约): Delta = 持仓数
+- FOP (期货期权): Black-Scholes 模型 (简化处理)
+- WAR (权证): Black-Scholes 模型
+- FUND (基金): Delta = 持仓数
+- CRYPTO (加密货币): Delta = 持仓数
+- BOND (债券): 特殊处理 - 使用久期代替 Delta
 """
 
 from datetime import date
 from typing import Dict, List, Optional
 from loguru import logger
 
-from ..ib_client.models import Position, MarketData
+from ..ib_client.models import Position, MarketData, SecType
 from .black_scholes import BlackScholesModel
 from .models import Greeks, PortfolioGreeks, GreeksByUnderlying
 
@@ -137,6 +149,206 @@ class GreeksCalculator:
             vega_dollars=0.0
         )
 
+    def calculate_futures_greeks(
+        self,
+        spot: float,
+        position_size: float,
+        multiplier: float = 1.0
+    ) -> Greeks:
+        """
+        Calculate Greeks for a futures position
+
+        Futures have:
+        - Delta = contract_multiplier × position_size
+        - All other Greeks = 0
+
+        Args:
+            spot: Current futures price
+            position_size: Number of contracts (positive=long, negative=short)
+            multiplier: Contract multiplier (e.g., 50 for ES)
+
+        Returns:
+            Greeks object
+        """
+        effective_delta = position_size * multiplier
+        logger.debug(f"Futures Greeks: position={position_size}, multiplier={multiplier}, delta={effective_delta}")
+
+        return Greeks(
+            delta=effective_delta,
+            gamma=0.0,
+            theta=0.0,
+            vega=0.0,
+            rho=0.0,
+            delta_dollars=effective_delta * spot,
+            gamma_dollars=0.0,
+            theta_dollars=0.0,
+            vega_dollars=0.0
+        )
+
+    def calculate_forex_greeks(
+        self,
+        spot: float,
+        position_size: float
+    ) -> Greeks:
+        """
+        Calculate Greeks for a forex position
+
+        Forex positions:
+        - Delta = position_amount (notional value in base currency)
+        - All other Greeks = 0
+
+        Args:
+            spot: Current exchange rate
+            position_size: Position amount in base currency
+
+        Returns:
+            Greeks object
+        """
+        return Greeks(
+            delta=position_size,
+            gamma=0.0,
+            theta=0.0,
+            vega=0.0,
+            rho=0.0,
+            delta_dollars=position_size * spot,
+            gamma_dollars=0.0,
+            theta_dollars=0.0,
+            vega_dollars=0.0
+        )
+
+    def calculate_fund_greeks(
+        self,
+        spot: float,
+        position_size: float
+    ) -> Greeks:
+        """
+        Calculate Greeks for a fund (ETF/Mutual Fund) position
+
+        Funds behave like stocks:
+        - Delta = 1.0 per share
+        - All other Greeks = 0
+
+        Args:
+            spot: Current fund price/NAV
+            position_size: Number of shares
+
+        Returns:
+            Greeks object
+        """
+        return Greeks(
+            delta=position_size,
+            gamma=0.0,
+            theta=0.0,
+            vega=0.0,
+            rho=0.0,
+            delta_dollars=position_size * spot,
+            gamma_dollars=0.0,
+            theta_dollars=0.0,
+            vega_dollars=0.0
+        )
+
+    def calculate_crypto_greeks(
+        self,
+        spot: float,
+        position_size: float
+    ) -> Greeks:
+        """
+        Calculate Greeks for a cryptocurrency position
+
+        Crypto behaves like stocks:
+        - Delta = 1.0 per unit
+        - All other Greeks = 0
+
+        Args:
+            spot: Current crypto price
+            position_size: Number of units
+
+        Returns:
+            Greeks object
+        """
+        return Greeks(
+            delta=position_size,
+            gamma=0.0,
+            theta=0.0,
+            vega=0.0,
+            rho=0.0,
+            delta_dollars=position_size * spot,
+            gamma_dollars=0.0,
+            theta_dollars=0.0,
+            vega_dollars=0.0
+        )
+
+    def calculate_cfd_greeks(
+        self,
+        spot: float,
+        position_size: float
+    ) -> Greeks:
+        """
+        Calculate Greeks for a CFD position
+
+        CFDs behave like the underlying:
+        - Delta = 1.0 per contract
+        - All other Greeks = 0
+
+        Args:
+            spot: Current CFD price
+            position_size: Number of contracts
+
+        Returns:
+            Greeks object
+        """
+        return Greeks(
+            delta=position_size,
+            gamma=0.0,
+            theta=0.0,
+            vega=0.0,
+            rho=0.0,
+            delta_dollars=position_size * spot,
+            gamma_dollars=0.0,
+            theta_dollars=0.0,
+            vega_dollars=0.0
+        )
+
+    def calculate_bond_greeks(
+        self,
+        market_price: float,
+        position_size: float,
+        duration: float = 5.0
+    ) -> Greeks:
+        """
+        Calculate Greeks for a bond position
+
+        Bonds use duration as a proxy for interest rate sensitivity:
+        - Delta represents price sensitivity (using duration)
+        - Rho is more relevant for bonds
+        - Other Greeks = 0
+
+        Args:
+            market_price: Current bond price
+            position_size: Number of bonds
+            duration: Modified duration (default 5 years)
+
+        Returns:
+            Greeks object with duration-based sensitivity
+        """
+        # For bonds, we use duration as the primary risk measure
+        # Delta here represents the price sensitivity, scaled by duration
+        market_value = market_price * position_size
+        # Approximate: a 1% rate change moves price by -duration%
+        rho_sensitivity = -duration * market_value / 100
+
+        return Greeks(
+            delta=position_size,  # Raw position for accounting
+            gamma=0.0,
+            theta=0.0,
+            vega=0.0,
+            rho=rho_sensitivity,  # Bond price sensitivity to rates
+            delta_dollars=market_value,
+            gamma_dollars=0.0,
+            theta_dollars=0.0,
+            vega_dollars=0.0
+        )
+
     def calculate_position_greeks(
         self,
         position: Position,
@@ -145,6 +357,18 @@ class GreeksCalculator:
         """
         Calculate Greeks for a single position
 
+        Supports all IB asset types:
+        - STK (Stock): Delta = position_size
+        - OPT (Option): Black-Scholes model
+        - FUT (Futures): Delta = multiplier × position_size
+        - CASH (Forex): Delta = position_amount
+        - CFD: Delta = position_size
+        - FOP (Futures Option): Black-Scholes model
+        - WAR (Warrant): Black-Scholes model
+        - FUND (ETF/Mutual Fund): Delta = position_size
+        - CRYPTO: Delta = position_size
+        - BOND: Duration-based sensitivity
+
         Args:
             position: Position object
             market_data: Optional market data for the position
@@ -152,39 +376,108 @@ class GreeksCalculator:
         Returns:
             Greeks object
         """
+        spot = self._get_spot_price(position, market_data)
+
+        # 股票 (Stock)
         if position.is_stock:
-            spot = market_data.mid if market_data else position.market_price
-            if spot <= 0:
-                spot = position.avg_cost
             return self.calculate_stock_greeks(spot, position.position)
 
+        # 期权 (Option)
         elif position.is_option and position.option_details:
-            opt = position.option_details
+            return self._calculate_option_position_greeks(position, market_data, spot)
 
-            # Determine spot price
-            if market_data and market_data.underlying_price:
-                spot = market_data.underlying_price
-            else:
-                spot = position.market_price / (abs(position.position) * opt.multiplier) if position.market_price else 100.0
+        # 期货 (Futures)
+        elif position.is_futures:
+            multiplier = position.futures_details.multiplier if position.futures_details else 1.0
+            return self.calculate_futures_greeks(spot, position.position, multiplier)
 
-            # Get implied volatility
-            volatility = self.default_volatility
-            if market_data and market_data.implied_volatility:
-                volatility = market_data.implied_volatility
+        # 外汇 (Forex)
+        elif position.is_forex:
+            return self.calculate_forex_greeks(spot, position.position)
 
-            return self.calculate_option_greeks(
-                spot=spot,
-                strike=opt.strike,
-                expiry_days=opt.days_to_expiry,
-                volatility=volatility,
-                is_call=opt.is_call,
-                position_size=position.position,
-                multiplier=opt.multiplier
-            )
+        # 差价合约 (CFD)
+        elif position.is_cfd:
+            return self.calculate_cfd_greeks(spot, position.position)
 
+        # 期货期权 (Futures Option) - 使用 Black-Scholes 简化处理
+        elif position.is_futures_option and position.option_details:
+            return self._calculate_option_position_greeks(position, market_data, spot)
+
+        # 权证 (Warrant) - 类似期权处理
+        elif position.is_warrant and position.option_details:
+            return self._calculate_option_position_greeks(position, market_data, spot)
+
+        # 基金 (ETF/Mutual Fund)
+        elif position.is_fund:
+            return self.calculate_fund_greeks(spot, position.position)
+
+        # 加密货币 (Cryptocurrency)
+        elif position.is_crypto:
+            return self.calculate_crypto_greeks(spot, position.position)
+
+        # 债券 (Bond)
+        elif position.is_bond:
+            duration = 5.0  # 默认久期
+            if position.bond_details:
+                # 可以根据到期日估算久期
+                years_to_maturity = position.bond_details.days_to_maturity / 365.0
+                duration = min(years_to_maturity * 0.8, 10.0)  # 简化估算
+            return self.calculate_bond_greeks(spot, position.position, duration)
+
+        # 未知类型 - 按现货处理
         else:
-            logger.warning(f"Unknown position type for {position.symbol}: {position.sec_type}")
-            return Greeks()
+            logger.warning(
+                f"Unknown position type for {position.symbol}: {position.sec_type}. "
+                f"Treating as spot asset with Delta = position_size."
+            )
+            return self.calculate_stock_greeks(spot, position.position)
+
+    def _get_spot_price(self, position: Position, market_data: Optional[MarketData]) -> float:
+        """获取标的价格"""
+        if market_data:
+            if market_data.mid > 0:
+                return market_data.mid
+            if market_data.underlying_price and market_data.underlying_price > 0:
+                return market_data.underlying_price
+
+        if position.market_price > 0:
+            return position.market_price
+
+        if position.avg_cost > 0:
+            return position.avg_cost
+
+        return 100.0  # 默认值
+
+    def _calculate_option_position_greeks(
+        self,
+        position: Position,
+        market_data: Optional[MarketData],
+        spot: float
+    ) -> Greeks:
+        """计算期权类持仓的希腊值（期权、期货期权、权证）"""
+        opt = position.option_details
+
+        # 确定标的价格
+        if market_data and market_data.underlying_price:
+            underlying_spot = market_data.underlying_price
+        else:
+            # 尝试从期权价格反推
+            underlying_spot = spot
+
+        # 获取隐含波动率
+        volatility = self.default_volatility
+        if market_data and market_data.implied_volatility:
+            volatility = market_data.implied_volatility
+
+        return self.calculate_option_greeks(
+            spot=underlying_spot,
+            strike=opt.strike,
+            expiry_days=opt.days_to_expiry,
+            volatility=volatility,
+            is_call=opt.is_call,
+            position_size=position.position,
+            multiplier=opt.multiplier
+        )
 
     def calculate_portfolio_greeks(
         self,
