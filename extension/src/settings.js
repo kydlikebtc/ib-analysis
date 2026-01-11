@@ -173,7 +173,15 @@ function saveSettings() {
     return;
   }
 
-  chrome.storage.local.set({ settings }, () => {
+  // 同时保存到两种格式，以便 popup.js 使用
+  const storageData = {
+    settings,
+    // popup.js 使用的快捷 key
+    autoRefreshEnabled: settings.refresh.auto,
+    autoRefreshInterval: settings.refresh.interval * 1000 // 转换为毫秒
+  };
+
+  chrome.storage.local.set(storageData, () => {
     showToast('设置已保存', 'success');
     console.log('[Settings] 设置已保存:', settings);
   });

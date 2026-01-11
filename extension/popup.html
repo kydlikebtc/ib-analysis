@@ -119,12 +119,24 @@
 
     <!-- 底部按钮 -->
     <footer>
-      <button id="refresh-btn" class="btn-primary">
-        <span class="btn-icon">↻</span> 刷新数据
-      </button>
-      <button id="report-btn" class="btn-secondary">
-        <span class="btn-icon">📊</span> 完整报告
-      </button>
+      <div class="footer-row">
+        <button id="refresh-btn" class="btn-primary">
+          <span class="btn-icon">↻</span> 刷新数据
+        </button>
+        <button id="report-btn" class="btn-secondary">
+          <span class="btn-icon">📊</span> 完整报告
+        </button>
+      </div>
+      <div class="footer-row auto-refresh-row">
+        <label class="auto-refresh-label" for="auto-refresh-toggle">
+          <span id="auto-refresh-indicator" class="auto-refresh-indicator hidden" title="自动刷新中">●</span>
+          <span>自动刷新</span>
+        </label>
+        <label class="toggle-switch">
+          <input type="checkbox" id="auto-refresh-toggle">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
     </footer>
 
     <div class="update-time">

@@ -3,8 +3,10 @@ IB Client - Main client class for Interactive Brokers API
 """
 
 import asyncio
+import time
 from datetime import date, datetime
-from typing import Dict, List, Optional, Any
+from enum import Enum
+from typing import Dict, List, Optional, Any, Callable
 from loguru import logger
 
 try:
@@ -14,7 +16,35 @@ except ImportError:
     IB_INSYNC_AVAILABLE = False
     logger.warning("ib_insync not installed. Using simulation mode.")
 
-from .models import Position, AccountSummary, MarketData, OptionDetails
+from .models import (
+    Position, AccountSummary, MarketData,
+    OptionDetails, FuturesDetails, ForexDetails,
+    BondDetails, CryptoDetails, FundDetails, SecType
+)
+
+
+class ConnectionState(Enum):
+    """连接状态枚举"""
+    DISCONNECTED = "disconnected"
+    CONNECTING = "connecting"
+    CONNECTED = "connected"
+    RECONNECTING = "reconnecting"
+    ERROR = "error"
+
+
+class ConnectionError(Exception):
+    """连接错误基类"""
+    pass
+
+
+class AuthenticationError(ConnectionError):
+    """认证错误"""
+    pass
+
+
+class TimeoutError(ConnectionError):
+    """超时错误"""
+    pass
 
 
 class IBClient:
@@ -25,19 +55,39 @@ class IBClient:
     account data, and market data.
     """
 
-    def __init__(self, simulation_mode: bool = False):
+    def __init__(
+        self,
+        simulation_mode: bool = False,
+        max_reconnect_attempts: int = 3,
+        reconnect_delay: float = 2.0
+    ):
         """
         Initialize IB Client
 
         Args:
             simulation_mode: If True, use simulated data instead of real IB connection
+            max_reconnect_attempts: Maximum number of reconnection attempts
+            reconnect_delay: Base delay between reconnection attempts (exponential backoff)
         """
         self._ib: Optional[Any] = None
-        self._connected: bool = False
         self._simulation_mode = simulation_mode or not IB_INSYNC_AVAILABLE
         self._account_id: str = ""
         self._positions_cache: List[Position] = []
         self._market_data_cache: Dict[int, MarketData] = {}
+
+        # 连接状态管理
+        self._state: ConnectionState = ConnectionState.DISCONNECTED
+        self._last_error: Optional[str] = None
+        self._reconnect_attempts: int = 0
+        self._max_reconnect_attempts: int = max_reconnect_attempts
+        self._reconnect_delay: float = reconnect_delay
+
+        # 连接参数缓存 (用于重连)
+        self._connection_params: Dict[str, Any] = {}
+
+        # 回调函数
+        self._on_state_change: Optional[Callable[[ConnectionState], None]] = None
+        self._on_error: Optional[Callable[[str], None]] = None
 
         if self._simulation_mode:
             logger.info("IBClient initialized in SIMULATION mode")
@@ -45,10 +95,44 @@ class IBClient:
             logger.info("IBClient initialized for real IB connection")
 
     @property
+    def state(self) -> ConnectionState:
+        """获取当前连接状态"""
+        return self._state
+
+    @property
+    def last_error(self) -> Optional[str]:
+        """获取最后一次错误信息"""
+        return self._last_error
+
+    def _set_state(self, new_state: ConnectionState, error_msg: Optional[str] = None) -> None:
+        """更新连接状态"""
+        old_state = self._state
+        self._state = new_state
+        if error_msg:
+            self._last_error = error_msg
+            logger.error(f"Connection state: {old_state.value} -> {new_state.value}, error: {error_msg}")
+        else:
+            logger.info(f"Connection state: {old_state.value} -> {new_state.value}")
+
+        if self._on_state_change:
+            try:
+                self._on_state_change(new_state)
+            except Exception as e:
+                logger.warning(f"Error in state change callback: {e}")
+
+    def on_state_change(self, callback: Callable[[ConnectionState], None]) -> None:
+        """设置状态变化回调"""
+        self._on_state_change = callback
+
+    def on_error(self, callback: Callable[[str], None]) -> None:
+        """设置错误回调"""
+        self._on_error = callback
+
+    @property
     def is_connected(self) -> bool:
         """Check if connected to IB"""
         if self._simulation_mode:
-            return self._connected
+            return self._state == ConnectionState.CONNECTED
         return self._ib is not None and self._ib.isConnected()
 
     def connect(
@@ -74,12 +158,24 @@ class IBClient:
         Returns:
             True if connected successfully
         """
+        # 缓存连接参数用于重连
+        self._connection_params = {
+            "host": host,
+            "port": port,
+            "client_id": client_id,
+            "timeout": timeout,
+            "readonly": readonly,
+            "account": account
+        }
+
         if self._simulation_mode:
             logger.info(f"Simulation mode: Simulating connection to {host}:{port}")
-            self._connected = True
+            self._set_state(ConnectionState.CONNECTED)
             self._account_id = account or "DU1234567"
             logger.info(f"Connected to simulated account: {self._account_id}")
             return True
+
+        self._set_state(ConnectionState.CONNECTING)
 
         try:
             logger.info(f"Connecting to IB at {host}:{port} with client_id={client_id}")
@@ -94,25 +190,69 @@ class IBClient:
                 account=account
             )
 
-            self._connected = True
             accounts = self._ib.managedAccounts()
             self._account_id = account if account else accounts[0] if accounts else ""
 
+            self._set_state(ConnectionState.CONNECTED)
+            self._reconnect_attempts = 0  # 重置重连计数
             logger.info(f"Successfully connected to IB. Account: {self._account_id}")
             logger.debug(f"Available accounts: {accounts}")
 
             return True
 
         except Exception as e:
-            logger.error(f"Failed to connect to IB: {e}")
-            self._connected = False
+            error_msg = f"Failed to connect to IB: {e}"
+            self._set_state(ConnectionState.ERROR, error_msg)
+
+            # 触发错误回调
+            if self._on_error:
+                try:
+                    self._on_error(error_msg)
+                except Exception as cb_error:
+                    logger.warning(f"Error in error callback: {cb_error}")
+
             return False
+
+    def reconnect(self) -> bool:
+        """
+        尝试重新连接到 IB
+
+        使用缓存的连接参数和指数退避策略进行重连
+
+        Returns:
+            True if reconnected successfully
+        """
+        if not self._connection_params:
+            logger.error("No cached connection parameters. Call connect() first.")
+            return False
+
+        if self._reconnect_attempts >= self._max_reconnect_attempts:
+            error_msg = f"Max reconnection attempts ({self._max_reconnect_attempts}) reached"
+            self._set_state(ConnectionState.ERROR, error_msg)
+            logger.error(error_msg)
+            return False
+
+        self._reconnect_attempts += 1
+        delay = self._reconnect_delay * (2 ** (self._reconnect_attempts - 1))
+
+        logger.info(
+            f"Reconnection attempt {self._reconnect_attempts}/{self._max_reconnect_attempts} "
+            f"in {delay:.1f}s..."
+        )
+        self._set_state(ConnectionState.RECONNECTING)
+
+        # 等待后重试
+        time.sleep(delay)
+
+        # 使用缓存的参数重新连接
+        return self.connect(**self._connection_params)
 
     def disconnect(self) -> None:
         """Disconnect from IB"""
         if self._simulation_mode:
             logger.info("Simulation mode: Disconnecting")
-            self._connected = False
+            self._set_state(ConnectionState.DISCONNECTED)
+            self._reconnect_attempts = 0  # 重置重连计数
             return
 
         if self._ib and self._ib.isConnected():
@@ -120,7 +260,56 @@ class IBClient:
             self._ib.disconnect()
             logger.info("Disconnected from IB")
 
-        self._connected = False
+        self._set_state(ConnectionState.DISCONNECTED)
+        self._reconnect_attempts = 0  # 重置重连计数
+
+    def ensure_connected(self) -> bool:
+        """
+        确保已连接，如果断开则尝试重连
+
+        Returns:
+            True if connected (or reconnected successfully)
+        """
+        if self.is_connected:
+            return True
+
+        if self._state == ConnectionState.DISCONNECTED:
+            logger.warning("Connection lost. Attempting to reconnect...")
+            return self.reconnect()
+
+        if self._state == ConnectionState.ERROR:
+            # 如果之前出错，重置重连计数后重试
+            self._reconnect_attempts = 0
+            return self.reconnect()
+
+        return False
+
+    def check_connection(self) -> bool:
+        """
+        检查连接状态（心跳检测）
+
+        Returns:
+            True if connection is healthy
+        """
+        if self._simulation_mode:
+            return self._state == ConnectionState.CONNECTED
+
+        if not self._ib:
+            return False
+
+        try:
+            # 通过请求当前时间来检查连接是否存活
+            if self._ib.isConnected():
+                # 尝试一个轻量级操作来验证连接
+                self._ib.reqCurrentTime()
+                return True
+            else:
+                self._set_state(ConnectionState.DISCONNECTED)
+                return False
+        except Exception as e:
+            logger.warning(f"Connection check failed: {e}")
+            self._set_state(ConnectionState.ERROR, str(e))
+            return False
 
     def get_positions(self) -> List[Position]:
         """
@@ -157,24 +346,65 @@ class IBClient:
             return []
 
     def _convert_ib_position(self, pos: Any, contract: Any) -> Optional[Position]:
-        """Convert IB position to our Position model"""
+        """
+        Convert IB position to our Position model
+
+        Supports all IB asset types:
+        - STK (Stock)
+        - OPT (Option)
+        - FUT (Futures)
+        - CASH (Forex)
+        - BOND (Bond)
+        - CFD (Contract for Difference)
+        - FOP (Futures Option)
+        - WAR (Warrant)
+        - FUND (Mutual Fund/ETF)
+        - CRYPTO (Cryptocurrency)
+        """
         try:
+            sec_type = contract.secType
             option_details = None
+            futures_details = None
+            forex_details = None
+            bond_details = None
+            crypto_details = None
+            fund_details = None
 
-            if contract.secType == "OPT":
-                expiry_str = contract.lastTradeDateOrContractMonth
-                expiry_date = datetime.strptime(expiry_str, "%Y%m%d").date()
+            # 期权 (Option)
+            if sec_type == SecType.OPTION:
+                option_details = self._parse_option_details(contract)
 
-                option_details = OptionDetails(
-                    strike=float(contract.strike),
-                    right=contract.right,
-                    expiry=expiry_date,
-                    multiplier=int(contract.multiplier or 100)
-                )
+            # 期货期权 (Futures Option) - 与期权类似
+            elif sec_type == SecType.FUT_OPT:
+                option_details = self._parse_option_details(contract)
+
+            # 权证 (Warrant) - 与期权类似
+            elif sec_type == SecType.WARRANT:
+                option_details = self._parse_option_details(contract)
+
+            # 期货 (Futures)
+            elif sec_type == SecType.FUTURES:
+                futures_details = self._parse_futures_details(contract)
+
+            # 外汇 (Forex)
+            elif sec_type == SecType.FOREX:
+                forex_details = self._parse_forex_details(contract)
+
+            # 债券 (Bond)
+            elif sec_type == SecType.BOND:
+                bond_details = self._parse_bond_details(contract)
+
+            # 加密货币 (Crypto)
+            elif sec_type == SecType.CRYPTO:
+                crypto_details = self._parse_crypto_details(contract)
+
+            # 基金 (Fund/ETF)
+            elif sec_type == SecType.FUND:
+                fund_details = self._parse_fund_details(contract)
 
             return Position(
                 symbol=contract.symbol,
-                sec_type=contract.secType,
+                sec_type=sec_type,
                 con_id=contract.conId,
                 position=float(pos.position),
                 avg_cost=float(pos.avgCost),
@@ -182,11 +412,127 @@ class IBClient:
                 market_value=0.0,
                 currency=contract.currency,
                 exchange=contract.exchange or "SMART",
-                option_details=option_details
+                option_details=option_details,
+                futures_details=futures_details,
+                forex_details=forex_details,
+                bond_details=bond_details,
+                crypto_details=crypto_details,
+                fund_details=fund_details
             )
 
         except Exception as e:
             logger.error(f"Error converting position for {contract.symbol}: {e}")
+            return None
+
+    def _parse_option_details(self, contract: Any) -> Optional[OptionDetails]:
+        """解析期权详情"""
+        try:
+            expiry_str = contract.lastTradeDateOrContractMonth
+            expiry_date = datetime.strptime(expiry_str, "%Y%m%d").date()
+
+            return OptionDetails(
+                strike=float(contract.strike),
+                right=contract.right,
+                expiry=expiry_date,
+                multiplier=int(contract.multiplier or 100)
+            )
+        except Exception as e:
+            logger.warning(f"Error parsing option details for {contract.symbol}: {e}")
+            return None
+
+    def _parse_futures_details(self, contract: Any) -> Optional[FuturesDetails]:
+        """解析期货详情"""
+        try:
+            expiry_str = contract.lastTradeDateOrContractMonth
+            # 期货到期日可能是 YYYYMM 或 YYYYMMDD 格式
+            if len(expiry_str) == 6:
+                expiry_date = datetime.strptime(expiry_str + "01", "%Y%m%d").date()
+            else:
+                expiry_date = datetime.strptime(expiry_str, "%Y%m%d").date()
+
+            return FuturesDetails(
+                expiry=expiry_date,
+                multiplier=float(contract.multiplier or 1.0),
+                contract_month=expiry_str[:6] if len(expiry_str) >= 6 else None,
+                underlying=getattr(contract, 'underSymbol', None)
+            )
+        except Exception as e:
+            logger.warning(f"Error parsing futures details for {contract.symbol}: {e}")
+            return None
+
+    def _parse_forex_details(self, contract: Any) -> Optional[ForexDetails]:
+        """解析外汇详情"""
+        try:
+            symbol = contract.symbol
+            # 外汇通常格式为 EUR.USD 或 EURUSD
+            if '.' in symbol:
+                parts = symbol.split('.')
+                base = parts[0]
+                quote = parts[1] if len(parts) > 1 else contract.currency
+            else:
+                base = symbol[:3] if len(symbol) >= 3 else symbol
+                quote = symbol[3:] if len(symbol) >= 6 else contract.currency
+
+            return ForexDetails(
+                base_currency=base,
+                quote_currency=quote
+            )
+        except Exception as e:
+            logger.warning(f"Error parsing forex details for {contract.symbol}: {e}")
+            return None
+
+    def _parse_bond_details(self, contract: Any) -> Optional[BondDetails]:
+        """解析债券详情"""
+        try:
+            maturity_str = getattr(contract, 'maturity', None) or getattr(contract, 'lastTradeDateOrContractMonth', None)
+            if maturity_str:
+                if len(maturity_str) == 6:
+                    maturity_date = datetime.strptime(maturity_str + "01", "%Y%m%d").date()
+                else:
+                    maturity_date = datetime.strptime(maturity_str, "%Y%m%d").date()
+            else:
+                # 默认 5 年后到期
+                maturity_date = date.today().replace(year=date.today().year + 5)
+
+            coupon = getattr(contract, 'coupon', 0.0)
+
+            return BondDetails(
+                maturity_date=maturity_date,
+                coupon_rate=float(coupon) if coupon else 0.0,
+                face_value=1000.0,
+                rating=getattr(contract, 'rating', None)
+            )
+        except Exception as e:
+            logger.warning(f"Error parsing bond details for {contract.symbol}: {e}")
+            return None
+
+    def _parse_crypto_details(self, contract: Any) -> Optional[CryptoDetails]:
+        """解析加密货币详情"""
+        try:
+            return CryptoDetails(
+                base_currency=contract.symbol,
+                quote_currency=contract.currency or "USD"
+            )
+        except Exception as e:
+            logger.warning(f"Error parsing crypto details for {contract.symbol}: {e}")
+            return None
+
+    def _parse_fund_details(self, contract: Any) -> Optional[FundDetails]:
+        """解析基金详情"""
+        try:
+            # 尝试判断是 ETF 还是共同基金
+            fund_type = "ETF"  # 默认为 ETF
+            # 如果有特定标识，可以进一步判断
+            if hasattr(contract, 'secIdType') and contract.secIdType == 'CUSIP':
+                fund_type = "MutualFund"
+
+            return FundDetails(
+                fund_type=fund_type,
+                expense_ratio=None,  # IB 通常不提供这个信息
+                nav=None
+            )
+        except Exception as e:
+            logger.warning(f"Error parsing fund details for {contract.symbol}: {e}")
             return None
 
     def get_account_summary(self) -> Optional[AccountSummary]:
