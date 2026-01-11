@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/Users/kyd/ib-analysis/.venv/bin/python3
 """
 IB Portfolio Analyzer - Native Messaging Host
 处理来自 Chrome 扩展的请求，连接 IB API 获取数据
@@ -100,6 +100,8 @@ class NativeMessagingHost:
             'get_positions': self._handle_get_positions,
             'get_greeks': self._handle_get_greeks,
             'get_risk': self._handle_get_risk,
+            'test_connection': self._handle_test_connection,
+            'get_settings': self._handle_get_settings,
         }
 
         handler = handlers.get(action)
@@ -276,8 +278,17 @@ class NativeMessagingHost:
     def _handle_generate_report(self, params: Dict) -> Dict:
         """生成完整的 HTML 报告"""
         try:
+            # 检查依赖是否安装
+            try:
+                import loguru
+            except ImportError:
+                logger.error("缺少依赖: loguru")
+                return {
+                    "success": False,
+                    "error": "缺少依赖 loguru，请运行: pip install loguru"
+                }
+
             from src.visualizer.charts import PortfolioVisualizer
-            from datetime import datetime
 
             # 获取数据
             portfolio_data = self._handle_get_portfolio(params)
@@ -285,11 +296,15 @@ class NativeMessagingHost:
             if not portfolio_data.get('success'):
                 return portfolio_data
 
+            # 确保输出目录存在
+            output_dir = PROJECT_ROOT / "output" / "reports"
+            output_dir.mkdir(parents=True, exist_ok=True)
+
             # 生成报告
             visualizer = PortfolioVisualizer()
             report_path = visualizer.generate_report(
                 portfolio_data['data'],
-                output_path=str(PROJECT_ROOT / "output" / "reports" /
+                output_path=str(output_dir /
                                f"popup_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html")
             )
 
@@ -298,8 +313,16 @@ class NativeMessagingHost:
                 "report_path": str(report_path)
             }
 
+        except ImportError as e:
+            missing_module = str(e).replace("No module named ", "").strip("'\"")
+            logger.error(f"生成报告失败 - 缺少模块: {missing_module}")
+            return {
+                "success": False,
+                "error": f"缺少依赖 {missing_module}，请运行: pip install -r requirements.txt"
+            }
+
         except Exception as e:
-            logger.error(f"生成报告失败: {e}")
+            logger.error(f"生成报告失败: {e}\n{traceback.format_exc()}")
             return {
                 "success": False,
                 "error": str(e)
@@ -334,6 +357,97 @@ class NativeMessagingHost:
                 "risk": portfolio['data']['risk']
             }
         return portfolio
+
+    def _handle_test_connection(self, params: Dict) -> Dict:
+        """测试 IB TWS/Gateway 连接"""
+        host = params.get('host', '127.0.0.1')
+        port = params.get('port', 7497)
+        client_id = params.get('clientId', 1)
+
+        logger.info(f"测试连接: {host}:{port}, clientId={client_id}")
+
+        try:
+            import socket
+
+            # 首先测试端口是否可达
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(5)
+            result = sock.connect_ex((host, port))
+            sock.close()
+
+            if result != 0:
+                logger.warning(f"端口 {port} 不可达")
+                return {
+                    "success": False,
+                    "error": f"无法连接到 {host}:{port}，请确保 TWS/IB Gateway 正在运行且 API 已启用"
+                }
+
+            # 尝试使用 IB API 连接
+            try:
+                from src.ib_client.client import IBClient
+
+                ib_client = IBClient(host=host, port=port, client_id=client_id)
+                if ib_client.connect():
+                    ib_client.disconnect()
+                    logger.info("IB API 连接测试成功")
+                    return {
+                        "success": True,
+                        "message": "连接成功",
+                        "details": {
+                            "host": host,
+                            "port": port,
+                            "clientId": client_id
+                        }
+                    }
+                else:
+                    logger.warning("IB API 连接失败")
+                    return {
+                        "success": False,
+                        "error": "IB API 连接失败，请检查 TWS/Gateway 的 API 设置"
+                    }
+
+            except ImportError:
+                # IB 模块未安装，但端口可达
+                logger.info("IB 模块未安装，但端口可达")
+                return {
+                    "success": True,
+                    "message": "端口可达（IB 模块未安装，无法验证 API 连接）",
+                    "details": {
+                        "host": host,
+                        "port": port,
+                        "clientId": client_id
+                    }
+                }
+
+        except Exception as e:
+            logger.error(f"连接测试失败: {e}\n{traceback.format_exc()}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+
+    def _handle_get_settings(self, params: Dict) -> Dict:
+        """获取当前设置（供扩展查询）"""
+        # 返回默认设置信息和系统状态
+        return {
+            "success": True,
+            "settings": {
+                "defaultHost": "127.0.0.1",
+                "defaultPort": 7497,
+                "defaultClientId": 1,
+                "portPresets": {
+                    "tws_paper": 7497,
+                    "tws_live": 7496,
+                    "gateway_paper": 4001,
+                    "gateway_live": 4002
+                }
+            },
+            "system": {
+                "version": "1.0.0",
+                "pythonVersion": sys.version,
+                "projectRoot": str(PROJECT_ROOT)
+            }
+        }
 
 
 def main():

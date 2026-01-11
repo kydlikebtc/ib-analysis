@@ -56,6 +56,34 @@ header h1 {
   color: #721c24;
 }
 
+/* 头部右侧区域 */
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 设置按钮 */
+.btn-icon-only {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: #f0f0f0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  transition: background 0.2s;
+  flex: none;
+}
+
+.btn-icon-only:hover {
+  background: #e0e0e0;
+}
+
 /* 加载状态 */
 .loading {
   text-align: center;

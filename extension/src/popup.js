@@ -36,13 +36,13 @@ document.addEventListener('DOMContentLoaded', () => {
  * 初始化 DOM 元素引用
  */
 function initElements() {
-  elements.loadingView = document.getElementById('loading-view');
-  elements.errorView = document.getElementById('error-view');
-  elements.mainView = document.getElementById('main-view');
-  elements.statusBadge = document.getElementById('connection-status');
-  elements.updateTime = document.getElementById('update-time');
+  elements.loadingView = document.getElementById('loading');
+  elements.errorView = document.getElementById('error');
+  elements.mainView = document.getElementById('content');
+  elements.statusBadge = document.getElementById('status');
+  elements.updateTime = document.getElementById('last-update');
   elements.refreshBtn = document.getElementById('refresh-btn');
-  elements.fullReportBtn = document.getElementById('full-report-btn');
+  elements.fullReportBtn = document.getElementById('report-btn');
 }
 
 /**
@@ -52,6 +52,11 @@ function bindEvents() {
   elements.refreshBtn?.addEventListener('click', () => fetchPortfolioData());
   elements.fullReportBtn?.addEventListener('click', () => generateFullReport());
   document.getElementById('retry-btn')?.addEventListener('click', () => fetchPortfolioData());
+
+  // 设置按钮
+  document.getElementById('settings-btn')?.addEventListener('click', () => {
+    window.location.href = 'settings.html';
+  });
 }
 
 /**
@@ -164,7 +169,7 @@ function showError(message) {
   elements.mainView?.classList.add('hidden');
   elements.errorView?.classList.remove('hidden');
 
-  const errorMsg = elements.errorView?.querySelector('p');
+  const errorMsg = document.getElementById('error-message');
   if (errorMsg) {
     errorMsg.textContent = message || '连接 IB API 失败，请确保 TWS/IB Gateway 正在运行';
   }
@@ -191,11 +196,10 @@ function renderPortfolioData(data) {
 function renderAccountOverview(account) {
   if (!account) return;
 
-  setElementText('net-liquidation', formatCurrency(account.net_liquidation));
+  setElementText('portfolio-value', formatCurrency(account.net_liquidation));
   setElementText('unrealized-pnl', formatCurrency(account.unrealized_pnl),
     account.unrealized_pnl >= 0 ? 'positive' : 'negative');
-  setElementText('daily-pnl', formatCurrency(account.daily_pnl),
-    account.daily_pnl >= 0 ? 'positive' : 'negative');
+  // position-count 将在 renderPositions 中设置
 }
 
 /**
@@ -204,23 +208,12 @@ function renderAccountOverview(account) {
 function renderGreeks(greeks) {
   if (!greeks) return;
 
-  const greeksData = [
-    { name: 'Delta', value: greeks.delta, dollars: greeks.delta_dollars },
-    { name: 'Gamma', value: greeks.gamma, dollars: greeks.gamma_dollars },
-    { name: 'Theta', value: greeks.theta, dollars: greeks.theta_dollars },
-    { name: 'Vega', value: greeks.vega, dollars: greeks.vega_dollars }
-  ];
-
-  const container = document.getElementById('greeks-grid');
-  if (!container) return;
-
-  container.innerHTML = greeksData.map(g => `
-    <div class="greek">
-      <span class="greek-name">${g.name}</span>
-      <span class="greek-value">${formatNumber(g.value, 4)}</span>
-      <span class="greek-dollars">${formatCurrency(g.dollars)}</span>
-    </div>
-  `).join('');
+  // 使用已有的 DOM 元素设置值
+  setElementText('delta', formatNumber(greeks.delta, 2));
+  setElementText('delta-dollars', formatCurrency(greeks.delta_dollars));
+  setElementText('gamma', formatNumber(greeks.gamma, 4));
+  setElementText('theta', formatCurrency(greeks.theta_dollars));
+  setElementText('vega', formatNumber(greeks.vega, 2));
 }
 
 /**
@@ -230,18 +223,21 @@ function renderRiskAssessment(risk) {
   if (!risk) return;
 
   // 风险等级徽章
-  const riskBadge = document.getElementById('risk-badge');
-  if (riskBadge) {
-    riskBadge.textContent = risk.level;
-    riskBadge.className = `risk-badge ${risk.level}`;
+  const riskLevel = document.getElementById('risk-level');
+  if (riskLevel) {
+    const badge = riskLevel.querySelector('.risk-badge');
+    if (badge) {
+      badge.textContent = risk.level;
+      badge.className = `risk-badge ${risk.level}`;
+    }
   }
 
   // 风险评分
-  setElementText('risk-score', `评分: ${risk.score}/100`);
+  setElementText('risk-score', `${risk.score}/100`);
 
   // 风险指标
+  setElementText('expected-return', formatCurrency(risk.expected_return || 0));
   setElementText('var-95', formatCurrency(risk.var_95));
-  setElementText('max-loss', formatCurrency(risk.max_loss));
   setElementText('prob-loss', `${(risk.probability_loss * 100).toFixed(1)}%`);
 }
 
@@ -249,7 +245,7 @@ function renderRiskAssessment(risk) {
  * 渲染建议列表
  */
 function renderRecommendations(recommendations) {
-  const container = document.getElementById('recommendations-list');
+  const container = document.getElementById('recommendations');
   if (!container || !recommendations) return;
 
   if (recommendations.length === 0) {
@@ -269,8 +265,11 @@ function renderRecommendations(recommendations) {
  * 渲染持仓列表
  */
 function renderPositions(positions) {
-  const container = document.getElementById('positions-table');
+  const container = document.getElementById('positions');
   if (!container || !positions) return;
+
+  // 更新持仓数量
+  setElementText('position-count', positions.length.toString());
 
   const header = `
     <div class="position-row header">

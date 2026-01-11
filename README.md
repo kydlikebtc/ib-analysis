@@ -280,19 +280,35 @@ MIT License
 - 显示账户概览、希腊值、风险评估
 - 提供投资建议和持仓列表
 - 支持数据缓存，加快加载速度
+- **可配置设置页面**：支持在扩展内配置 TWS/Gateway 连接参数
+- **连接测试**：一键测试 IB API 连接状态
+- **快速预设**：常用端口配置一键切换
 
 ### 安装方法
 
 详见 [extension/README.md](extension/README.md)
 
 ```bash
-# 1. 在 Chrome 中加载 extension 目录作为扩展
-# 2. 运行安装脚本注册 Native Host
+# 1. 创建虚拟环境并安装依赖
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+# 2. 在 Chrome 中加载 extension 目录作为扩展
+# 3. 运行安装脚本注册 Native Host
 cd extension
 ./install.sh
 ```
 
 ## 更新日志
+
+### v0.2.1 (2026-01-11)
+- 新增扩展设置页面，支持配置 IB 连接参数
+- 新增连接测试功能
+- 新增快速端口预设按钮 (TWS Paper/Live, Gateway Paper/Live)
+- 改进 Native Host 错误处理，提供更友好的依赖缺失提示
+- 修复 popup.js 中的 DOM 元素 ID 映射问题
+- 添加虚拟环境支持
 
 ### v0.2.0 (2026-01-11)
 - 新增 Chrome 浏览器扩展
@@ -302,8 +318,8 @@ cd extension
 
 ### v0.1.0 (2026-01-11)
 - 初始版本发布
-- 实现IB API连接和仓位读取
-- 实现Black-Scholes希腊值计算
+- 实现 IB API 连接和仓位读取
+- 实现 Black-Scholes 希腊值计算
 - 实现蒙特卡洛模拟
 - 实现可视化图表
 - 实现投资建议生成

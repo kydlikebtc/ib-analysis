@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IB Portfolio Analyzer - 设置</title>
+  <link rel="stylesheet" href="src/settings.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <button id="back-btn" class="back-btn" title="返回">
+        <span class="btn-icon">←</span>
+      </button>
+      <h1>设置</h1>
+      <div class="spacer"></div>
+    </header>
+
+    <main>
+      <!-- 连接设置 -->
+      <section class="settings-section">
+        <h2>
+          <span class="section-icon">🔌</span>
+          IB 连接设置
+        </h2>
+
+        <div class="form-group">
+          <label for="ib-host">主机地址</label>
+          <input type="text" id="ib-host" value="127.0.0.1" placeholder="127.0.0.1">
+          <p class="help-text">TWS/IB Gateway 运行的 IP 地址</p>
+        </div>
+
+        <div class="form-group">
+          <label for="ib-port">端口</label>
+          <input type="number" id="ib-port" value="7497" min="1" max="65535">
+          <p class="help-text">TWS Paper: 7497 | TWS Live: 7496 | Gateway Paper: 4001 | Gateway Live: 4002</p>
+        </div>
+
+        <div class="form-group">
+          <label for="client-id">客户端 ID</label>
+          <input type="number" id="client-id" value="1" min="0" max="999">
+          <p class="help-text">用于区分不同的 API 客户端连接</p>
+        </div>
+
+        <!-- 快速预设 -->
+        <div class="presets">
+          <p class="preset-label">快速设置：</p>
+          <div class="preset-buttons">
+            <button class="preset-btn" data-port="7497">TWS Paper</button>
+            <button class="preset-btn" data-port="7496">TWS Live</button>
+            <button class="preset-btn" data-port="4001">Gateway Paper</button>
+            <button class="preset-btn" data-port="4002">Gateway Live</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- 刷新设置 -->
+      <section class="settings-section">
+        <h2>
+          <span class="section-icon">🔄</span>
+          刷新设置
+        </h2>
+
+        <div class="form-group toggle-group">
+          <label for="auto-refresh">自动刷新</label>
+          <label class="toggle">
+            <input type="checkbox" id="auto-refresh">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="form-group" id="refresh-interval-group">
+          <label for="refresh-interval">刷新间隔（秒）</label>
+          <input type="number" id="refresh-interval" value="60" min="10" max="3600">
+          <p class="help-text">最小 10 秒，最大 3600 秒（1小时）</p>
+        </div>
+      </section>
+
+      <!-- 通知设置 -->
+      <section class="settings-section">
+        <h2>
+          <span class="section-icon">🔔</span>
+          通知设置
+        </h2>
+
+        <div class="form-group toggle-group">
+          <label for="show-notifications">显示风险通知</label>
+          <label class="toggle">
+            <input type="checkbox" id="show-notifications" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <p class="help-text">当出现高风险情况时显示浏览器通知</p>
+      </section>
+
+      <!-- 数据设置 -->
+      <section class="settings-section">
+        <h2>
+          <span class="section-icon">📊</span>
+          数据设置
+        </h2>
+
+        <div class="form-group toggle-group">
+          <label for="include-greeks">显示希腊值</label>
+          <label class="toggle">
+            <input type="checkbox" id="include-greeks" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="form-group toggle-group">
+          <label for="include-monte-carlo">蒙特卡洛模拟</label>
+          <label class="toggle">
+            <input type="checkbox" id="include-monte-carlo" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="form-group toggle-group">
+          <label for="include-recommendations">投资建议</label>
+          <label class="toggle">
+            <input type="checkbox" id="include-recommendations" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </section>
+
+      <!-- 操作区 -->
+      <section class="settings-section">
+        <h2>
+          <span class="section-icon">🛠️</span>
+          操作
+        </h2>
+
+        <div class="action-buttons">
+          <button id="test-connection" class="action-btn">
+            <span class="btn-icon">🔗</span>
+            测试连接
+          </button>
+          <button id="clear-cache" class="action-btn secondary">
+            <span class="btn-icon">🗑️</span>
+            清除缓存
+          </button>
+          <button id="reset-settings" class="action-btn danger">
+            <span class="btn-icon">↺</span>
+            重置设置
+          </button>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <button id="save-btn" class="btn-primary">
+        <span class="btn-icon">💾</span>
+        保存设置
+      </button>
+    </footer>
+
+    <!-- 状态提示 -->
+    <div id="toast" class="toast hidden">
+      <span id="toast-message"></span>
+    </div>
+  </div>
+
+  <script src="src/settings.js"></script>
+</body>
+</html>
