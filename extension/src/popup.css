@@ -1,0 +1,441 @@
+/* 基础样式 */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 13px;
+  color: #333;
+  background: #f5f7fa;
+  width: 380px;
+  min-height: 400px;
+}
+
+.container {
+  padding: 12px;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* 头部 */
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+header h1 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #2E86AB;
+}
+
+.status {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 10px;
+  background: #f0f0f0;
+  color: #666;
+}
+
+.status.connected {
+  background: #d4edda;
+  color: #155724;
+}
+
+.status.error {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+/* 加载状态 */
+.loading {
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  margin: 0 auto 15px;
+  border: 3px solid #f3f3f3;
+  border-top: 3px solid #2E86AB;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.loading p {
+  color: #666;
+}
+
+/* 错误状态 */
+.error {
+  text-align: center;
+  padding: 30px 20px;
+  background: #fff3cd;
+  border-radius: 8px;
+  margin: 10px 0;
+}
+
+.error p {
+  color: #856404;
+  margin-bottom: 15px;
+}
+
+.error button {
+  background: #ffc107;
+  color: #333;
+  border: none;
+  padding: 8px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+/* 卡片 */
+.card {
+  background: white;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 10px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.card h2 {
+  font-size: 13px;
+  font-weight: 600;
+  color: #555;
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #eee;
+}
+
+/* 指标网格 */
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.metric {
+  text-align: center;
+}
+
+.metric .label {
+  display: block;
+  font-size: 11px;
+  color: #888;
+  margin-bottom: 4px;
+}
+
+.metric .value {
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+  color: #333;
+}
+
+.metric .value.positive {
+  color: #28a745;
+}
+
+.metric .value.negative {
+  color: #dc3545;
+}
+
+/* 希腊值 */
+.greeks-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.greek {
+  text-align: center;
+  padding: 8px 4px;
+  background: #f8f9fa;
+  border-radius: 6px;
+}
+
+.greek-name {
+  display: block;
+  font-size: 11px;
+  color: #666;
+  margin-bottom: 4px;
+}
+
+.greek-value {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: #2E86AB;
+}
+
+.greek-dollars {
+  display: block;
+  font-size: 10px;
+  color: #888;
+}
+
+.greek-sub {
+  font-size: 10px;
+  color: #888;
+}
+
+/* 风险评估 */
+.risk-container {
+  display: flex;
+  gap: 15px;
+}
+
+.risk-level {
+  text-align: center;
+  padding: 10px 15px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  min-width: 80px;
+}
+
+.risk-badge {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 4px;
+  margin-bottom: 5px;
+}
+
+.risk-badge.LOW {
+  background: #d4edda;
+  color: #155724;
+}
+
+.risk-badge.MEDIUM {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.risk-badge.HIGH {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.risk-badge.CRITICAL {
+  background: #721c24;
+  color: white;
+}
+
+.risk-score {
+  font-size: 11px;
+  color: #666;
+}
+
+.risk-metrics {
+  flex: 1;
+}
+
+.risk-metric {
+  display: flex;
+  justify-content: space-between;
+  padding: 5px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.risk-metric:last-child {
+  border-bottom: none;
+}
+
+.risk-metric .label {
+  font-size: 12px;
+  color: #666;
+}
+
+.risk-metric .value {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* 建议 */
+.recommendations {
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.recommendation {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px;
+  margin-bottom: 6px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  border-left: 3px solid #ffc107;
+}
+
+.recommendation.HIGH {
+  border-left-color: #dc3545;
+  background: #fff5f5;
+}
+
+.recommendation.MEDIUM {
+  border-left-color: #ffc107;
+}
+
+.recommendation.LOW {
+  border-left-color: #28a745;
+  background: #f0fff4;
+}
+
+.recommendation .priority {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+.recommendation.HIGH .priority {
+  background: #dc3545;
+  color: white;
+}
+
+.recommendation.MEDIUM .priority {
+  background: #ffc107;
+  color: #333;
+}
+
+.recommendation.LOW .priority {
+  background: #28a745;
+  color: white;
+}
+
+.recommendation .text {
+  font-size: 12px;
+  color: #333;
+  line-height: 1.4;
+}
+
+/* 持仓表格 */
+.positions-table {
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.position-row {
+  display: grid;
+  grid-template-columns: 1fr 50px 70px 60px;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 12px;
+}
+
+.position-row:last-child {
+  border-bottom: none;
+}
+
+.position-row.header {
+  font-weight: 600;
+  color: #666;
+  font-size: 11px;
+}
+
+.position-symbol {
+  font-weight: 500;
+}
+
+.position-type {
+  color: #888;
+  font-size: 11px;
+}
+
+.position-pnl.positive {
+  color: #28a745;
+}
+
+.position-pnl.negative {
+  color: #dc3545;
+}
+
+/* 底部按钮 */
+footer {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+button {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-primary {
+  background: #2E86AB;
+  color: white;
+}
+
+.btn-primary:hover {
+  background: #236b8c;
+}
+
+.btn-secondary {
+  background: #e9ecef;
+  color: #333;
+}
+
+.btn-secondary:hover {
+  background: #dee2e6;
+}
+
+.btn-icon {
+  font-size: 14px;
+}
+
+/* 更新时间 */
+.update-time {
+  text-align: center;
+  margin-top: 10px;
+  font-size: 11px;
+  color: #999;
+}
+
+/* 滚动条 */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #aaa;
+}

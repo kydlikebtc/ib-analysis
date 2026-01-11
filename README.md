@@ -121,6 +121,13 @@ ib-analysis/
 │   │   ├── analyzer.py       # 分析器
 │   │   └── models.py         # 数据模型
 │   └── main.py               # 主程序入口
+├── extension/                # Chrome浏览器扩展
+│   ├── manifest.json         # 扩展清单
+│   ├── popup.html            # 弹窗界面
+│   ├── src/                  # JavaScript代码
+│   ├── native-host/          # Native Messaging主机
+│   ├── icons/                # 扩展图标
+│   └── install.sh            # 安装脚本
 ├── tests/                    # 测试用例
 ├── config/
 │   └── config.yaml           # 配置文件
@@ -263,7 +270,35 @@ MIT License
 
 欢迎提交Issue和Pull Request！
 
+## Chrome 浏览器扩展
+
+除了命令行工具，本项目还提供 Chrome 浏览器扩展，可以在浏览器中快速查看投资组合数据。
+
+### 扩展功能
+
+- 点击即可获取账户数据（无需后台服务持续运行）
+- 显示账户概览、希腊值、风险评估
+- 提供投资建议和持仓列表
+- 支持数据缓存，加快加载速度
+
+### 安装方法
+
+详见 [extension/README.md](extension/README.md)
+
+```bash
+# 1. 在 Chrome 中加载 extension 目录作为扩展
+# 2. 运行安装脚本注册 Native Host
+cd extension
+./install.sh
+```
+
 ## 更新日志
+
+### v0.2.0 (2026-01-11)
+- 新增 Chrome 浏览器扩展
+- 实现 Native Messaging 通信
+- 支持按需获取数据（无需持续后台服务）
+- 添加扩展图标和 UI 界面
 
 ### v0.1.0 (2026-01-11)
 - 初始版本发布

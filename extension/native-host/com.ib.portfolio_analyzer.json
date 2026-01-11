@@ -1,0 +1,9 @@
+{
+  "name": "com.ib.portfolio_analyzer",
+  "description": "IB Portfolio Analyzer Native Host - 连接 Interactive Brokers API 获取投资组合数据",
+  "path": "/Users/kyd/ib-analysis/extension/native-host/ib_native_host.py",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://EXTENSION_ID_PLACEHOLDER/"
+  ]
+}

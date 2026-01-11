@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>IB Portfolio Analyzer</title>
+  <link rel="stylesheet" href="src/popup.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>IB Portfolio Analyzer</h1>
+      <span class="status" id="status">未连接</span>
+    </header>
+
+    <!-- 加载状态 -->
+    <div id="loading" class="loading hidden">
+      <div class="spinner"></div>
+      <p>正在连接 IB 并获取数据...</p>
+    </div>
+
+    <!-- 错误提示 -->
+    <div id="error" class="error hidden">
+      <p id="error-message"></p>
+      <button id="retry-btn">重试</button>
+    </div>
+
+    <!-- 主内容 -->
+    <div id="content" class="hidden">
+      <!-- 账户概览 -->
+      <section class="card">
+        <h2>账户概览</h2>
+        <div class="metrics-grid">
+          <div class="metric">
+            <span class="label">投资组合价值</span>
+            <span class="value" id="portfolio-value">--</span>
+          </div>
+          <div class="metric">
+            <span class="label">未实现盈亏</span>
+            <span class="value" id="unrealized-pnl">--</span>
+          </div>
+          <div class="metric">
+            <span class="label">持仓数量</span>
+            <span class="value" id="position-count">--</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- 希腊值 -->
+      <section class="card">
+        <h2>希腊值汇总</h2>
+        <div class="greeks-grid">
+          <div class="greek">
+            <span class="greek-name">Delta</span>
+            <span class="greek-value" id="delta">--</span>
+            <span class="greek-dollars" id="delta-dollars">--</span>
+          </div>
+          <div class="greek">
+            <span class="greek-name">Gamma</span>
+            <span class="greek-value" id="gamma">--</span>
+          </div>
+          <div class="greek">
+            <span class="greek-name">Theta</span>
+            <span class="greek-value" id="theta">--</span>
+            <span class="greek-sub">/天</span>
+          </div>
+          <div class="greek">
+            <span class="greek-name">Vega</span>
+            <span class="greek-value" id="vega">--</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- 风险评估 -->
+      <section class="card">
+        <h2>风险评估</h2>
+        <div class="risk-container">
+          <div class="risk-level" id="risk-level">
+            <span class="risk-badge">--</span>
+            <span class="risk-score" id="risk-score">--/100</span>
+          </div>
+          <div class="risk-metrics">
+            <div class="risk-metric">
+              <span class="label">30天预期收益</span>
+              <span class="value" id="expected-return">--</span>
+            </div>
+            <div class="risk-metric">
+              <span class="label">95% VaR</span>
+              <span class="value" id="var-95">--</span>
+            </div>
+            <div class="risk-metric">
+              <span class="label">亏损概率</span>
+              <span class="value" id="prob-loss">--</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 建议 -->
+      <section class="card">
+        <h2>投资建议</h2>
+        <div id="recommendations" class="recommendations">
+          <!-- 动态填充 -->
+        </div>
+      </section>
+
+      <!-- 持仓列表 -->
+      <section class="card">
+        <h2>持仓明细</h2>
+        <div id="positions" class="positions-table">
+          <!-- 动态填充 -->
+        </div>
+      </section>
+    </div>
+
+    <!-- 底部按钮 -->
+    <footer>
+      <button id="refresh-btn" class="btn-primary">
+        <span class="btn-icon">↻</span> 刷新数据
+      </button>
+      <button id="report-btn" class="btn-secondary">
+        <span class="btn-icon">📊</span> 完整报告
+      </button>
+    </footer>
+
+    <div class="update-time">
+      <span id="last-update">上次更新: --</span>
+    </div>
+  </div>
+
+  <script src="src/popup.js"></script>
+</body>
+</html>
