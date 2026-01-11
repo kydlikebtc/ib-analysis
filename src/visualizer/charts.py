@@ -760,6 +760,15 @@ class Visualizer:
 
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
+        # Create symlink to charts directory for HTML report to find charts
+        report_dir = os.path.dirname(output_path)
+        charts_link = os.path.join(report_dir, "charts")
+        if not os.path.exists(charts_link):
+            try:
+                os.symlink(self.output_dir, charts_link)
+            except OSError:
+                pass  # Symlink may already exist or not supported
+
         # Generate all charts first
         self.plot_position_pie(positions)
         self.plot_greeks_summary(greeks)
