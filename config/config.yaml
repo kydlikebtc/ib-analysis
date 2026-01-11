@@ -1,0 +1,55 @@
+# IB Analysis System Configuration
+
+# Interactive Brokers Connection Settings
+ib:
+  host: "127.0.0.1"
+  port: 7497  # 7497 for TWS Paper, 7496 for TWS Live, 4001 for Gateway Paper, 4002 for Gateway Live
+  client_id: 1
+  timeout: 30
+  readonly: true
+  account: ""  # Leave empty to use default account
+
+# Greeks Calculation Settings
+greeks:
+  risk_free_rate: 0.05  # 5% annual rate
+  default_volatility: 0.25  # 25% default IV if not available
+  dividend_yield: 0.0  # Default dividend yield
+  use_market_iv: true  # Use market implied volatility when available
+
+# Monte Carlo Simulation Settings
+monte_carlo:
+  num_paths: 10000
+  num_days: 30
+  random_seed: null  # Set a number for reproducibility, null for random
+  use_correlation: true  # Use correlation matrix for multi-asset simulation
+  parallel_workers: -1  # -1 for auto (all cores)
+
+# Visualization Settings
+visualization:
+  style: "seaborn-v0_8-whitegrid"
+  dpi: 150
+  figure_size: [12, 8]
+  chinese_font: "SimHei"  # Font for Chinese characters
+  color_scheme: "viridis"
+  interactive: true  # Generate interactive plotly charts
+
+# Output Settings
+output:
+  charts_dir: "output/charts"
+  reports_dir: "output/reports"
+  export_formats: ["png", "html"]
+
+# Risk Assessment Thresholds
+risk:
+  delta_neutral_threshold: 0.1  # Delta per $10k capital
+  gamma_warning_threshold: 0.05
+  theta_decay_warning: -100  # Daily theta in dollars
+  concentration_warning: 0.3  # Single position > 30%
+  var_confidence_levels: [0.95, 0.99]
+
+# Logging Settings
+logging:
+  level: "INFO"
+  format: "{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}"
+  rotation: "10 MB"
+  retention: "7 days"
