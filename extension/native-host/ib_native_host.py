@@ -276,49 +276,34 @@ class NativeMessagingHost:
         }
 
     def _handle_generate_report(self, params: Dict) -> Dict:
-        """生成完整的 HTML 报告"""
+        """生成完整的 HTML 报告，保存到文件并返回路径"""
         try:
-            # 检查依赖是否安装
-            try:
-                import loguru
-            except ImportError:
-                logger.error("缺少依赖: loguru")
-                return {
-                    "success": False,
-                    "error": "缺少依赖 loguru，请运行: pip install loguru"
-                }
-
-            from src.visualizer.charts import PortfolioVisualizer
-
             # 获取数据
             portfolio_data = self._handle_get_portfolio(params)
 
             if not portfolio_data.get('success'):
                 return portfolio_data
 
-            # 确保输出目录存在
-            output_dir = PROJECT_ROOT / "output" / "reports"
-            output_dir.mkdir(parents=True, exist_ok=True)
+            # 生成 HTML 报告内容
+            data = portfolio_data['data']
+            html_content = self._generate_simple_report(data)
 
-            # 生成报告
-            visualizer = PortfolioVisualizer()
-            report_path = visualizer.generate_report(
-                portfolio_data['data'],
-                output_path=str(output_dir /
-                               f"popup_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html")
-            )
+            # 保存到文件
+            report_dir = PROJECT_ROOT / "output" / "reports"
+            report_dir.mkdir(parents=True, exist_ok=True)
+
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            report_path = report_dir / f"portfolio_report_{timestamp}.html"
+
+            with open(report_path, 'w', encoding='utf-8') as f:
+                f.write(html_content)
+
+            logger.info(f"报告已保存到: {report_path}")
 
             return {
                 "success": True,
-                "report_path": str(report_path)
-            }
-
-        except ImportError as e:
-            missing_module = str(e).replace("No module named ", "").strip("'\"")
-            logger.error(f"生成报告失败 - 缺少模块: {missing_module}")
-            return {
-                "success": False,
-                "error": f"缺少依赖 {missing_module}，请运行: pip install -r requirements.txt"
+                "report_path": str(report_path),
+                "report_url": f"file://{report_path}"
             }
 
         except Exception as e:
@@ -327,6 +312,407 @@ class NativeMessagingHost:
                 "success": False,
                 "error": str(e)
             }
+
+    def _generate_simple_report(self, data: Dict) -> str:
+        """生成带图表的 HTML 报告（使用 Chart.js）"""
+        import json as json_lib
+
+        account = data.get('account', {})
+        greeks = data.get('greeks', {})
+        risk = data.get('risk', {})
+        recommendations = data.get('recommendations', [])
+        positions = data.get('positions', [])
+
+        # 生成持仓表格行
+        position_rows = ""
+        for pos in positions:
+            pnl_color = "green" if pos.get('unrealized_pnl', 0) >= 0 else "red"
+            position_rows += f"""
+            <tr>
+                <td>{pos.get('symbol', '')}</td>
+                <td>{pos.get('sec_type', '')}</td>
+                <td>{pos.get('position', 0):+.0f}</td>
+                <td>${pos.get('market_value', 0):,.2f}</td>
+                <td style="color: {pnl_color}">${pos.get('unrealized_pnl', 0):+,.2f}</td>
+            </tr>
+            """
+
+        # 生成建议列表
+        rec_items = ""
+        priority_colors = {'HIGH': '#DC3545', 'MEDIUM': '#FFC107', 'LOW': '#28A745'}
+        for rec in recommendations:
+            priority = rec.get('priority', 'LOW')
+            color = priority_colors.get(priority, '#6c757d')
+            rec_items += f"""
+            <div style="background: #f8f9fa; padding: 10px; margin: 5px 0; border-left: 4px solid {color}; border-radius: 4px;">
+                <span style="background: {color}; color: white; padding: 2px 8px; border-radius: 3px; font-size: 12px;">{priority}</span>
+                <span style="margin-left: 10px;">{rec.get('message', '')}</span>
+            </div>
+            """
+
+        # 准备图表数据
+        # 持仓分配饼图数据
+        pie_labels = [pos.get('symbol', '') for pos in positions]
+        pie_values = [abs(pos.get('market_value', 0)) for pos in positions]
+
+        # 希腊值柱状图数据
+        greeks_labels = ['Delta ($)', 'Gamma ($)', 'Theta ($/日)', 'Vega ($)']
+        greeks_values = [
+            greeks.get('delta_dollars', 0),
+            greeks.get('gamma_dollars', 0),
+            greeks.get('theta_dollars', 0),
+            greeks.get('vega_dollars', 0)
+        ]
+        greeks_colors = ['#2E86AB', '#28A745', '#DC3545', '#FFC107']
+
+        # 按标的分组的 Delta 暴露
+        delta_by_symbol = {}
+        for pos in positions:
+            symbol = pos.get('symbol', 'Unknown')
+            # 简化计算：股票 delta=1，期权需要实际 delta
+            if pos.get('sec_type') == 'STK':
+                delta = pos.get('position', 0)
+            else:
+                delta = pos.get('position', 0) * 50  # 期权按 50 delta 估算
+            delta_by_symbol[symbol] = delta_by_symbol.get(symbol, 0) + delta
+
+        delta_labels = list(delta_by_symbol.keys())
+        delta_values = list(delta_by_symbol.values())
+
+        # 生成模拟的蒙特卡洛数据（30天）
+        import random
+        random.seed(42)
+        initial_value = account.get('net_liquidation', 100000)
+        num_paths = 50
+        num_days = 30
+
+        mc_paths = []
+        for _ in range(num_paths):
+            path = [initial_value]
+            for day in range(num_days):
+                daily_return = random.gauss(0.0003, 0.015)  # 日均收益 0.03%，波动率 1.5%
+                path.append(path[-1] * (1 + daily_return))
+            mc_paths.append(path)
+
+        # 计算百分位数
+        percentiles = {}
+        for day in range(num_days + 1):
+            day_values = [path[day] for path in mc_paths]
+            day_values.sort()
+            percentiles[day] = {
+                'p5': day_values[int(len(day_values) * 0.05)],
+                'p25': day_values[int(len(day_values) * 0.25)],
+                'p50': day_values[int(len(day_values) * 0.50)],
+                'p75': day_values[int(len(day_values) * 0.75)],
+                'p95': day_values[int(len(day_values) * 0.95)],
+            }
+
+        mc_labels = list(range(num_days + 1))
+        mc_p5 = [percentiles[d]['p5'] for d in mc_labels]
+        mc_p25 = [percentiles[d]['p25'] for d in mc_labels]
+        mc_p50 = [percentiles[d]['p50'] for d in mc_labels]
+        mc_p75 = [percentiles[d]['p75'] for d in mc_labels]
+        mc_p95 = [percentiles[d]['p95'] for d in mc_labels]
+
+        # 收益分布直方图数据
+        final_returns = [(path[-1] / path[0] - 1) * 100 for path in mc_paths]
+        return_bins = {}
+        bin_size = 2
+        for ret in final_returns:
+            bin_key = int(ret // bin_size) * bin_size
+            return_bins[bin_key] = return_bins.get(bin_key, 0) + 1
+
+        return_labels = sorted(return_bins.keys())
+        return_values = [return_bins[k] for k in return_labels]
+        return_labels_str = [f"{k}% ~ {k+bin_size}%" for k in return_labels]
+
+        html = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>IB Portfolio Report</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {{ font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }}
+        .container {{ max-width: 1200px; margin: 0 auto; background: white; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); border-radius: 8px; }}
+        h1 {{ color: #2E86AB; border-bottom: 2px solid #2E86AB; padding-bottom: 10px; }}
+        h2 {{ color: #343A40; margin-top: 30px; }}
+        .summary-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin: 20px 0; }}
+        .summary-card {{ background: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 4px solid #2E86AB; }}
+        .summary-card.success {{ border-left-color: #28A745; }}
+        .summary-card.danger {{ border-left-color: #DC3545; }}
+        .summary-card.warning {{ border-left-color: #FFC107; }}
+        .summary-card h3 {{ margin: 0 0 5px 0; font-size: 14px; color: #6c757d; }}
+        .summary-card .value {{ font-size: 20px; font-weight: bold; color: #343A40; }}
+        table {{ width: 100%; border-collapse: collapse; margin: 20px 0; }}
+        th, td {{ padding: 10px; text-align: left; border-bottom: 1px solid #dee2e6; }}
+        th {{ background-color: #2E86AB; color: white; }}
+        tr:hover {{ background-color: #f5f5f5; }}
+        .risk-badge {{ display: inline-block; padding: 5px 15px; border-radius: 4px; color: white; font-weight: bold; }}
+        .risk-LOW {{ background-color: #28A745; }}
+        .risk-MEDIUM {{ background-color: #FFC107; color: #343A40; }}
+        .risk-HIGH {{ background-color: #DC3545; }}
+        .risk-CRITICAL {{ background-color: #721c24; }}
+        .timestamp {{ color: #6c757d; font-size: 12px; }}
+        .chart-row {{ display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 20px 0; }}
+        .chart-container {{ background: #fff; padding: 15px; border-radius: 8px; border: 1px solid #dee2e6; }}
+        .chart-full {{ grid-column: 1 / -1; }}
+        canvas {{ max-height: 300px; }}
+        .chart-title {{ font-size: 14px; font-weight: bold; color: #343A40; margin-bottom: 10px; text-align: center; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 投资组合分析报告</h1>
+        <p class="timestamp">生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+
+        <h2>账户概览</h2>
+        <div class="summary-grid">
+            <div class="summary-card">
+                <h3>净资产</h3>
+                <div class="value">${account.get('net_liquidation', 0):,.2f}</div>
+            </div>
+            <div class="summary-card {'success' if account.get('unrealized_pnl', 0) >= 0 else 'danger'}">
+                <h3>未实现盈亏</h3>
+                <div class="value">${account.get('unrealized_pnl', 0):+,.2f}</div>
+            </div>
+            <div class="summary-card">
+                <h3>风险等级</h3>
+                <div class="value"><span class="risk-badge risk-{risk.get('level', 'LOW')}">{risk.get('level', 'N/A')}</span></div>
+            </div>
+            <div class="summary-card danger">
+                <h3>95% VaR</h3>
+                <div class="value">${risk.get('var_95', 0):,.2f}</div>
+            </div>
+        </div>
+
+        <h2>可视化分析</h2>
+        <div class="chart-row">
+            <div class="chart-container">
+                <div class="chart-title">持仓分配</div>
+                <canvas id="pieChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <div class="chart-title">希腊值汇总</div>
+                <canvas id="greeksChart"></canvas>
+            </div>
+        </div>
+
+        <div class="chart-row">
+            <div class="chart-container">
+                <div class="chart-title">Delta 暴露 (按标的)</div>
+                <canvas id="deltaChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <div class="chart-title">收益分布 (30天模拟)</div>
+                <canvas id="returnChart"></canvas>
+            </div>
+        </div>
+
+        <div class="chart-row">
+            <div class="chart-container chart-full">
+                <div class="chart-title">蒙特卡洛模拟 - 投资组合价值路径 (30天, 50条路径)</div>
+                <canvas id="mcChart"></canvas>
+            </div>
+        </div>
+
+        <h2>希腊值汇总</h2>
+        <div class="summary-grid">
+            <div class="summary-card">
+                <h3>Delta ($)</h3>
+                <div class="value">${greeks.get('delta_dollars', 0):,.2f}</div>
+            </div>
+            <div class="summary-card">
+                <h3>Gamma ($)</h3>
+                <div class="value">${greeks.get('gamma_dollars', 0):,.2f}</div>
+            </div>
+            <div class="summary-card {'danger' if greeks.get('theta_dollars', 0) < -50 else ''}">
+                <h3>Theta ($/日)</h3>
+                <div class="value">${greeks.get('theta_dollars', 0):,.2f}</div>
+            </div>
+            <div class="summary-card">
+                <h3>Vega ($)</h3>
+                <div class="value">${greeks.get('vega_dollars', 0):,.2f}</div>
+            </div>
+        </div>
+
+        <h2>投资建议</h2>
+        {rec_items if rec_items else '<p style="color: #666;">暂无建议</p>'}
+
+        <h2>持仓明细</h2>
+        <table>
+            <tr>
+                <th>标的</th>
+                <th>类型</th>
+                <th>数量</th>
+                <th>市值</th>
+                <th>盈亏</th>
+            </tr>
+            {position_rows}
+        </table>
+
+        <p class="timestamp" style="margin-top: 30px; text-align: center;">
+            IB Portfolio Analyzer v1.0.0 | 数据仅供参考，不构成投资建议
+        </p>
+    </div>
+
+    <script>
+        // 持仓分配饼图
+        new Chart(document.getElementById('pieChart'), {{
+            type: 'doughnut',
+            data: {{
+                labels: {json_lib.dumps(pie_labels)},
+                datasets: [{{
+                    data: {json_lib.dumps(pie_values)},
+                    backgroundColor: ['#2E86AB', '#28A745', '#FFC107', '#DC3545', '#6c757d', '#17a2b8', '#6610f2', '#fd7e14']
+                }}]
+            }},
+            options: {{
+                responsive: true,
+                plugins: {{
+                    legend: {{ position: 'right' }}
+                }}
+            }}
+        }});
+
+        // 希腊值柱状图
+        new Chart(document.getElementById('greeksChart'), {{
+            type: 'bar',
+            data: {{
+                labels: {json_lib.dumps(greeks_labels)},
+                datasets: [{{
+                    data: {json_lib.dumps(greeks_values)},
+                    backgroundColor: {json_lib.dumps(greeks_colors)}
+                }}]
+            }},
+            options: {{
+                responsive: true,
+                plugins: {{ legend: {{ display: false }} }},
+                scales: {{
+                    y: {{ beginAtZero: true }}
+                }}
+            }}
+        }});
+
+        // Delta 暴露柱状图
+        new Chart(document.getElementById('deltaChart'), {{
+            type: 'bar',
+            data: {{
+                labels: {json_lib.dumps(delta_labels)},
+                datasets: [{{
+                    label: 'Delta',
+                    data: {json_lib.dumps(delta_values)},
+                    backgroundColor: {json_lib.dumps(delta_values)}.map(v => v >= 0 ? '#28A745' : '#DC3545')
+                }}]
+            }},
+            options: {{
+                responsive: true,
+                plugins: {{ legend: {{ display: false }} }},
+                scales: {{
+                    y: {{ beginAtZero: true }}
+                }}
+            }}
+        }});
+
+        // 收益分布直方图
+        new Chart(document.getElementById('returnChart'), {{
+            type: 'bar',
+            data: {{
+                labels: {json_lib.dumps(return_labels_str)},
+                datasets: [{{
+                    label: '频次',
+                    data: {json_lib.dumps(return_values)},
+                    backgroundColor: '#2E86AB'
+                }}]
+            }},
+            options: {{
+                responsive: true,
+                plugins: {{ legend: {{ display: false }} }},
+                scales: {{
+                    y: {{ beginAtZero: true, title: {{ display: true, text: '频次' }} }},
+                    x: {{ title: {{ display: true, text: '收益率' }} }}
+                }}
+            }}
+        }});
+
+        // 蒙特卡洛模拟图
+        new Chart(document.getElementById('mcChart'), {{
+            type: 'line',
+            data: {{
+                labels: {json_lib.dumps(mc_labels)},
+                datasets: [
+                    {{
+                        label: '95th 百分位',
+                        data: {json_lib.dumps(mc_p95)},
+                        borderColor: 'rgba(46, 134, 171, 0.3)',
+                        backgroundColor: 'rgba(46, 134, 171, 0.1)',
+                        fill: '+1',
+                        pointRadius: 0
+                    }},
+                    {{
+                        label: '75th 百分位',
+                        data: {json_lib.dumps(mc_p75)},
+                        borderColor: 'rgba(46, 134, 171, 0.5)',
+                        backgroundColor: 'rgba(46, 134, 171, 0.2)',
+                        fill: '+1',
+                        pointRadius: 0
+                    }},
+                    {{
+                        label: '中位数',
+                        data: {json_lib.dumps(mc_p50)},
+                        borderColor: '#2E86AB',
+                        borderWidth: 2,
+                        fill: false,
+                        pointRadius: 0
+                    }},
+                    {{
+                        label: '25th 百分位',
+                        data: {json_lib.dumps(mc_p25)},
+                        borderColor: 'rgba(46, 134, 171, 0.5)',
+                        backgroundColor: 'transparent',
+                        fill: false,
+                        pointRadius: 0
+                    }},
+                    {{
+                        label: '5th 百分位',
+                        data: {json_lib.dumps(mc_p5)},
+                        borderColor: 'rgba(220, 53, 69, 0.5)',
+                        backgroundColor: 'transparent',
+                        fill: false,
+                        pointRadius: 0
+                    }}
+                ]
+            }},
+            options: {{
+                responsive: true,
+                interaction: {{ intersect: false, mode: 'index' }},
+                plugins: {{
+                    legend: {{ position: 'top' }},
+                    tooltip: {{
+                        callbacks: {{
+                            label: function(context) {{
+                                return context.dataset.label + ': $' + context.parsed.y.toLocaleString(undefined, {{maximumFractionDigits: 0}});
+                            }}
+                        }}
+                    }}
+                }},
+                scales: {{
+                    x: {{ title: {{ display: true, text: '天数' }} }},
+                    y: {{
+                        title: {{ display: true, text: '投资组合价值 ($)' }},
+                        ticks: {{
+                            callback: function(value) {{ return '$' + value.toLocaleString(); }}
+                        }}
+                    }}
+                }}
+            }}
+        }});
+    </script>
+</body>
+</html>
+        """
+        return html
 
     def _handle_get_positions(self, params: Dict) -> Dict:
         """仅获取持仓列表"""

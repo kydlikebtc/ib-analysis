@@ -328,9 +328,11 @@ async function generateFullReport() {
       params: { format: 'html' }
     });
 
-    if (response.success && response.report_path) {
-      // 通知用户报告已生成
-      alert(`报告已生成: ${response.report_path}`);
+    if (response.success && response.report_url) {
+      // 使用 file:// URL 在新标签页中打开本地 HTML 报告
+      chrome.tabs.create({ url: response.report_url });
+    } else if (response.error) {
+      throw new Error(response.error);
     }
   } catch (error) {
     console.error('[IB Analyzer] 生成报告失败:', error);

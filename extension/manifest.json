@@ -5,7 +5,8 @@
   "description": "Interactive Brokers 账户仓位分析 - 希腊值、蒙特卡洛模拟、风险评估",
   "permissions": [
     "nativeMessaging",
-    "storage"
+    "storage",
+    "tabs"
   ],
   "action": {
     "default_popup": "popup.html",
